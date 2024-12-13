@@ -1,31 +1,18 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSnap } from '../utils/useSnap';
 import { draggableDiv, distanceLine, distanceLabel, dottedLine } from '../styles/dragDiv';
+import { calculateDistance, type Distance } from '../utils/calculateDistance';
 
-interface Distance {
-  div: HTMLElement;
-  edges: {
-    type: 'left' | 'right' | 'top' | 'bottom';
-    distance: number;
-    x1: number;
-    y1: number;
-    x2: number;
-    y2: number;
-    needsExtension: boolean;
-    extensionLine?: {
-      x1: number;
-      y1: number;
-      x2: number;
-      y2: number;
-    };
-  }[];
-}
 interface Props {
-  Content?: React.FC;
+  Content?: React.FC<any>;
+  initialPosition?: { x: number; y: number };
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
+  className?: string;
 }
-const DraggableDiv = (props: Props) => {
-  const { Content } = props;
-  const [position, setPosition] = useState({ x: 100, y: 100 });
+
+const DraggableDiv = ({ Content, initialPosition = { x: 100, y: 100 }, onDragStart, onDragEnd, className }: Props) => {
+  const [position, setPosition] = useState(initialPosition);
   const [isDragging, setIsDragging] = useState(false);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [nearestEdges, setNearestEdges] = useState<Distance | null>(null);
@@ -40,281 +27,90 @@ const DraggableDiv = (props: Props) => {
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
+    onDragStart?.();
     const rect = divRef.current?.getBoundingClientRect();
-    if (rect) {
+    const canvasRect = document.getElementById('canvas-container')?.getBoundingClientRect();
+    
+    if (rect && canvasRect) {
       setOffset({
-        x: e.clientX - rect.left,
-        y: e.clientY - rect.top
+        x: e.clientX - (rect.left - canvasRect.left),
+        y: e.clientY - (rect.top - canvasRect.top)
       });
     }
-  };
-
-  const calculateDistance = () => {
-    if (!divRef.current) return;
-
-    const draggableRect = divRef.current.getBoundingClientRect();
-    const staticDivs = document.getElementsByClassName('static-div');
-    let minTotalDistance = Infinity;
-    let closestDiv: Distance | null = null;
-
-    Array.from(staticDivs).forEach((div) => {
-      const staticRect = div.getBoundingClientRect();
-      const centerDistance = Math.sqrt(
-        Math.pow((draggableRect.left + draggableRect.width/2) - (staticRect.left + staticRect.width/2), 2) +
-        Math.pow((draggableRect.top + draggableRect.height/2) - (staticRect.top + staticRect.height/2), 2)
-      );
-
-      if (centerDistance < minTotalDistance) {
-        minTotalDistance = centerDistance;
-
-        // 判断拖动div的位置
-        const isAbove = draggableRect.bottom < staticRect.top;
-        const isBelow = draggableRect.top > staticRect.bottom;
-        const isLeft = draggableRect.right  < staticRect.left;
-        const isRight = draggableRect.left > staticRect.right;
-
-        // 根据位置选择要计算的边
-        let selectedEdges = [];
-
-        if (isLeft) {
-          selectedEdges.push({
-            type: 'left' as const,
-            distance: Math.abs(draggableRect.right - staticRect.left),
-            x1: draggableRect.right,
-            y1: draggableRect.top + draggableRect.height/2,
-            x2: staticRect.left,
-            y2: draggableRect.top + draggableRect.height/2,
-            needsExtension: false
-          });
-        }
-        if (isRight) {
-          selectedEdges.push({
-            type: 'right' as const,
-            distance: Math.abs(draggableRect.left - staticRect.right),
-            x1: draggableRect.left,
-            y1: draggableRect.top + draggableRect.height/2,
-            x2: staticRect.right,
-            y2: draggableRect.top + draggableRect.height/2,
-            needsExtension: false
-          });
-        }
-        if (isAbove) {
-          selectedEdges.push({
-            type: 'top' as const,
-            distance: Math.abs(draggableRect.bottom - staticRect.top),
-            x1: draggableRect.left + draggableRect.width/2,
-            y1: draggableRect.bottom,
-            x2: draggableRect.left + draggableRect.width/2,
-            y2: staticRect.top,
-            needsExtension: false
-          });
-        }
-        if (isBelow) {
-          selectedEdges.push({
-            type: 'bottom' as const,
-            distance: Math.abs(draggableRect.top - staticRect.bottom),
-            x1: draggableRect.left + draggableRect.width/2,
-            y1: draggableRect.top,
-            x2: draggableRect.left + draggableRect.width/2,
-            y2: staticRect.bottom,
-            needsExtension: false
-          });
-        }
-
-        // 如果没有边被选中（说明重叠或部分重叠），选择最近的两条边
-        if (selectedEdges.length === 0) {
-          selectedEdges = [
-            {
-              type: 'left' as const,
-              distance: Math.abs(draggableRect.left - staticRect.left),
-              x1: draggableRect.right,
-              y1: draggableRect.top + draggableRect.height/2,
-              x2: staticRect.left,
-              y2: draggableRect.top + draggableRect.height/2,
-              needsExtension: false
-            },
-            {
-              type: 'top' as const,
-              distance: Math.abs(draggableRect.top - staticRect.top),
-              x1: draggableRect.left + draggableRect.width/2,
-              y1: draggableRect.bottom,
-              x2: draggableRect.left + draggableRect.width/2,
-              y2: staticRect.top,
-              needsExtension: false
-            }
-          ];
-        }
-
-        // 如果只有一条边被选中，添加距离最近的另一条边
-        if (selectedEdges.length === 1) {
-          let otherEdges
-          if (selectedEdges[0].type === 'left' || selectedEdges[0].type === 'right') {
-            otherEdges = [
-              {
-                type: 'top' as const,
-                distance: Math.abs(draggableRect.top - staticRect.top),
-                x1: draggableRect.left + draggableRect.width/2,
-                y1: draggableRect.bottom,
-                x2: draggableRect.left + draggableRect.width/2,
-                y2: staticRect.top,
-                needsExtension: false
-              },
-              {
-                type: 'bottom' as const,
-                distance: Math.abs(draggableRect.top - staticRect.bottom),
-                x1: draggableRect.left + draggableRect.width/2,
-                y1: draggableRect.top,
-                x2: draggableRect.left + draggableRect.width/2,
-                y2: staticRect.bottom,
-                needsExtension: false
-              }
-            ]
-          } else {
-            otherEdges = [
-              {
-                type: 'left' as const,
-                distance: Math.abs(draggableRect.left - staticRect.left),
-                x1: draggableRect.right,
-                y1: draggableRect.top + draggableRect.height/2,
-                x2: staticRect.left,
-                y2: draggableRect.top + draggableRect.height/2,
-                needsExtension: false
-              },
-              {
-                type: 'right' as const,
-                distance: Math.abs(draggableRect.left - staticRect.right),
-                x1: draggableRect.left,
-                y1: draggableRect.top + draggableRect.height/2,
-                x2: staticRect.right,
-                y2: draggableRect.top + draggableRect.height/2,
-                needsExtension: false
-              }
-            ]
-          }
-          otherEdges = otherEdges.filter(edge => edge.type !== selectedEdges[0].type);
-
-          otherEdges.sort((a, b) => a.distance - b.distance);
-          selectedEdges.push(otherEdges[0]);
-        }
-
-        // 检查哪条边需要延长线
-        selectedEdges.forEach(edge => {
-          if (edge.type === 'left' || edge.type === 'right') {
-            if (draggableRect.top > staticRect.bottom || draggableRect.bottom < staticRect.top) {
-              edge.needsExtension = true;
-              // 计算延长线的坐标
-              // debugger
-              console.log('div', div)
-              const extensionY = draggableRect.bottom < staticRect.top ? staticRect.top : staticRect.bottom;
-              edge.extensionLine = {
-                x1: edge.type === 'left' ? staticRect.left : staticRect.right,
-                y1: extensionY,
-                x2: edge.type === 'left' ? staticRect.left : staticRect.right,
-                y2: edge.y2
-              };
-            }
-          } else {
-            if (draggableRect.left > staticRect.right || draggableRect.right < staticRect.left) {
-              edge.needsExtension = true;
-              // 计算延长线的坐标
-              const extensionX = draggableRect.left > staticRect.right ? staticRect.right : staticRect.left;
-              edge.extensionLine = {
-                x1: extensionX,
-                y1: edge.type === 'top' ? staticRect.top : staticRect.bottom,
-                x2: edge.x2,
-                y2: edge.type === 'top' ? staticRect.top : staticRect.bottom
-              };
-            }
-          }
-        });
-
-        closestDiv = {
-          div: div as HTMLElement,
-          edges: selectedEdges
-        };
-      }
-    });
-
-    setNearestEdges(closestDiv);
   };
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging) return;
 
+    const canvasRect = document.getElementById('canvas-container')?.getBoundingClientRect();
+    if (!canvasRect) return;
+
     const newPosition = {
       x: e.clientX - offset.x,
-      y: e.clientY - offset.y
+      y: e.clientY - offset.y - canvasRect.top
     };
 
-    // 只更新位置和计算距离
-    setPosition(newPosition);
-    calculateDistance();
-  };
+    // 先计算最近的边
+    if (divRef.current) {
+      setNearestEdges(calculateDistance(divRef.current));
+    }
 
-  // 当 edges 变化时处理磁吸
-  useEffect(() => {
-    if (!isDragging || !nearestEdges) return;
-
-    const { position: snappedPosition, snapped } = handleSnap(position);
+    // 然后处理磁吸
+    const { position: snappedPosition, snapped } = handleSnap(newPosition);
 
     // 根据吸附状态设置最终位置
     setPosition({
-      x: snapped.horizontal ? snappedPosition.x : position.x,
-      y: snapped.vertical ? snappedPosition.y : position.y
+      x: snapped.horizontal ? snappedPosition.x : newPosition.x,
+      y: snapped.vertical ? snappedPosition.y : newPosition.y
     });
-  }, [nearestEdges, isDragging, position, handleSnap]);
+  };
 
   const handleMouseUp = () => {
     setIsDragging(false);
+    setNearestEdges(null); // 清除边缘数据
+    onDragEnd?.();
   };
 
   useEffect(() => {
-    if (isDragging) {
+    // if (isDragging) {
       window.addEventListener('mousemove', handleMouseMove);
       window.addEventListener('mouseup', handleMouseUp);
-    }
+    // }
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isDragging, offset]);
+  }, [isDragging, offset, nearestEdges]);
 
   return (
     <>
-      {Content ?
-        <Content           
-          ref={divRef}
-          className={draggableDiv()}
-          style={{
-            left: `${position.x}px`,
-            top: `${position.y}px`,
-            cursor: isDragging ? 'grabbing' : 'grab',
-          }}
-          onMouseDown={handleMouseDown}
-        />
-        :
-        <div
-          ref={divRef}
-          className={draggableDiv()}
-          style={{
-            left: `${position.x}px`,
-            top: `${position.y}px`,
-            cursor: isDragging ? 'grabbing' : 'grab',
-          }}
-          onMouseDown={handleMouseDown}
-        >
-          Drag me
-        </div>
-      }
-      {nearestEdges && nearestEdges.edges.map((edge, index) => (
+      <div
+        ref={divRef}
+        className={`${draggableDiv({
+          type: 'draggable',
+          className: 'inline-block !bg-transparent !shadow-none'
+        })} ${className || ''}`}
+        style={{
+          left: `${position.x}px`,
+          top: `${position.y}px`,
+          cursor: isDragging ? 'grabbing' : 'grab',
+        }}
+        onMouseDown={handleMouseDown}
+      >
+        {Content ? <Content /> : 'Drag me'}
+      </div>
+
+      {
+      isDragging && 
+      nearestEdges && nearestEdges.edges.map((edge, index) => (
         <React.Fragment key={index}>
           {/* 测量线 */}
           <div
             className={distanceLine({ direction: edge.type === 'left' || edge.type === 'right' ? 'horizontal' : 'vertical' })}
             style={{
-              left: Math.min(edge.x1, edge.x2),
-              top: Math.min(edge.y1, edge.y2),
+              left: edge.x1,
+              top: edge.y1,
               width: edge.type === 'left' || edge.type === 'right'
                 ? `${Math.abs(edge.x2 - edge.x1)}px`
                 : '2px',

@@ -69,9 +69,6 @@ export const useSnap = ({ threshold = 5, elementRef, edges = [] }: UseSnapProps)
     let snapped = { horizontal: false, vertical: false };
     let finalPosition = { ...newPosition };
 
-    console.log('Snapping with edges:', edges);
-    console.log('Current position:', newPosition);
-
     edges.forEach(edge => {
       console.log('Processing edge:', edge.type, 'distance:', edge.distance);
       if (edge.type === 'left' || edge.type === 'right') {
@@ -92,15 +89,12 @@ export const useSnap = ({ threshold = 5, elementRef, edges = [] }: UseSnapProps)
           if (edge.type === 'top') {
             finalPosition.y = edge.y2;
           } else {
-            finalPosition.y = edge.y2;
+            finalPosition.y = edge.y1;
           }
           snapped.vertical = true;
         }
       }
     });
-
-    console.log('Final position:', finalPosition);
-    console.log('Snapped:', snapped);
 
     // 更新吸附状态
     setSnappedEdges(snapped);

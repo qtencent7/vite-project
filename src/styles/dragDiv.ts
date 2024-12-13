@@ -4,28 +4,19 @@ export const draggableDiv = cva(
   // base styles
   [
     'absolute',
-    'cursor-move',
     'select-none',
     'flex',
     'items-center',
     'justify-center',
-    'text-white',
-    'rounded-lg',
-    'shadow-md',
   ],
   {
     variants: {
-      size: {
-        default: ['w-[100px]', 'h-[100px]'],
-        large: ['w-[150px]', 'h-[100px]'],
-      },
       type: {
-        draggable: ['bg-primary'],
+        draggable: [],
         static: ['bg-muted', 'border-2', 'border-border'],
       },
     },
     defaultVariants: {
-      size: 'default',
       type: 'draggable',
     },
   }
