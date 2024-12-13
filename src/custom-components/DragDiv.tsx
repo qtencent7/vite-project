@@ -1,5 +1,6 @@
-import React, { useState, useRef, useEffect, ReactNode } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useSnap } from '../utils/useSnap';
+import { draggableDiv, distanceLine, distanceLabel, dottedLine } from '../styles/dragDiv';
 
 interface Distance {
   div: HTMLElement;
@@ -284,32 +285,22 @@ const DraggableDiv = (props: Props) => {
       {Content ?
         <Content           
           ref={divRef}
+          className={draggableDiv()}
           style={{
-            position: 'absolute',
             left: `${position.x}px`,
             top: `${position.y}px`,
-            width: '100px',
-            height: '100px',
-            backgroundColor: '#4CAF50',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: 'none',
-            zIndex: 1000
           }}
           onMouseDown={handleMouseDown}
         />
         :
         <div
           ref={divRef}
+          className={draggableDiv()}
           style={{
-            position: 'absolute',
             left: `${position.x}px`,
             top: `${position.y}px`,
-            width: '100px',
-            height: '100px',
-            backgroundColor: '#4CAF50',
             cursor: isDragging ? 'grabbing' : 'grab',
-            userSelect: 'none',
-            zIndex: 1000
           }}
           onMouseDown={handleMouseDown}
         >
@@ -320,7 +311,7 @@ const DraggableDiv = (props: Props) => {
         <React.Fragment key={index}>
           {/* 测量线 */}
           <div
-            className={`distance-line ${edge.type === 'left' || edge.type === 'right' ? 'horizontal' : 'vertical'}`}
+            className={distanceLine({ direction: edge.type === 'left' || edge.type === 'right' ? 'horizontal' : 'vertical' })}
             style={{
               left: Math.min(edge.x1, edge.x2),
               top: Math.min(edge.y1, edge.y2),
@@ -332,10 +323,9 @@ const DraggableDiv = (props: Props) => {
                 : '2px'
             }}
           >
-            <span className="distance-label" style={{
-              top: edge.type === 'left' || edge.type === 'right' ? '-20px': `${edge.distance / 2}px`,
-              left: edge.type === 'left' || edge.type === 'right' ? `${edge.distance / 2}px` : 0
-            }}>
+            <span className={distanceLabel({ 
+              direction: edge.type === 'left' || edge.type === 'right' ? 'horizontal' : 'vertical' 
+            })}>
               {`${Math.round(edge.distance)}px`}
             </span>
           </div>
@@ -343,7 +333,9 @@ const DraggableDiv = (props: Props) => {
           {/* 延长线 */}
           {edge.needsExtension && edge.extensionLine && (
             <div
-              className="dotted-line"
+              className={dottedLine({
+                direction: edge.type === 'left' || edge.type === 'right' ? 'vertical' : 'horizontal'
+              })}
               style={{
                 left: Math.min(edge.extensionLine.x1, edge.extensionLine.x2),
                 top: Math.min(edge.extensionLine.y1, edge.extensionLine.y2),
