@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect, ReactNode } from 'react';
+import { useSnap } from '../utils/useSnap';
 
 interface Distance {
   div: HTMLElement;
@@ -28,6 +29,13 @@ const DraggableDiv = (props: Props) => {
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [nearestEdges, setNearestEdges] = useState<Distance | null>(null);
   const divRef = useRef<HTMLDivElement>(null);
+
+  // 使用磁吸钩子
+  const { handleSnap, snappedEdges } = useSnap({
+    threshold: 5,
+    elementRef: divRef,
+    edges: nearestEdges?.edges || []
+  });
 
   const handleMouseDown = (e: React.MouseEvent) => {
     setIsDragging(true);
@@ -138,44 +146,51 @@ const DraggableDiv = (props: Props) => {
 
         // 如果只有一条边被选中，添加距离最近的另一条边
         if (selectedEdges.length === 1) {
-          const otherEdges = [
-            {
-              type: 'left' as const,
-              distance: Math.abs(draggableRect.left - staticRect.left),
-              x1: draggableRect.right,
-              y1: draggableRect.top + draggableRect.height/2,
-              x2: staticRect.left,
-              y2: draggableRect.top + draggableRect.height/2,
-              needsExtension: false
-            },
-            {
-              type: 'right' as const,
-              distance: Math.abs(draggableRect.left - staticRect.right),
-              x1: draggableRect.left,
-              y1: draggableRect.top + draggableRect.height/2,
-              x2: staticRect.right,
-              y2: draggableRect.top + draggableRect.height/2,
-              needsExtension: false
-            },
-            {
-              type: 'top' as const,
-              distance: Math.abs(draggableRect.top - staticRect.top),
-              x1: draggableRect.left + draggableRect.width/2,
-              y1: draggableRect.bottom,
-              x2: draggableRect.left + draggableRect.width/2,
-              y2: staticRect.top,
-              needsExtension: false
-            },
-            {
-              type: 'bottom' as const,
-              distance: Math.abs(draggableRect.top - staticRect.bottom),
-              x1: draggableRect.left + draggableRect.width/2,
-              y1: draggableRect.top,
-              x2: draggableRect.left + draggableRect.width/2,
-              y2: staticRect.bottom,
-              needsExtension: false
-            }
-          ].filter(edge => edge.type !== selectedEdges[0].type);
+          let otherEdges
+          if (selectedEdges[0].type === 'left' || selectedEdges[0].type === 'right') {
+            otherEdges = [
+              {
+                type: 'top' as const,
+                distance: Math.abs(draggableRect.top - staticRect.top),
+                x1: draggableRect.left + draggableRect.width/2,
+                y1: draggableRect.bottom,
+                x2: draggableRect.left + draggableRect.width/2,
+                y2: staticRect.top,
+                needsExtension: false
+              },
+              {
+                type: 'bottom' as const,
+                distance: Math.abs(draggableRect.top - staticRect.bottom),
+                x1: draggableRect.left + draggableRect.width/2,
+                y1: draggableRect.top,
+                x2: draggableRect.left + draggableRect.width/2,
+                y2: staticRect.bottom,
+                needsExtension: false
+              }
+            ]
+          } else {
+            otherEdges = [
+              {
+                type: 'left' as const,
+                distance: Math.abs(draggableRect.left - staticRect.left),
+                x1: draggableRect.right,
+                y1: draggableRect.top + draggableRect.height/2,
+                x2: staticRect.left,
+                y2: draggableRect.top + draggableRect.height/2,
+                needsExtension: false
+              },
+              {
+                type: 'right' as const,
+                distance: Math.abs(draggableRect.left - staticRect.right),
+                x1: draggableRect.left,
+                y1: draggableRect.top + draggableRect.height/2,
+                x2: staticRect.right,
+                y2: draggableRect.top + draggableRect.height/2,
+                needsExtension: false
+              }
+            ]
+          }
+          otherEdges = otherEdges.filter(edge => edge.type !== selectedEdges[0].type);
 
           otherEdges.sort((a, b) => a.distance - b.distance);
           selectedEdges.push(otherEdges[0]);
@@ -224,13 +239,29 @@ const DraggableDiv = (props: Props) => {
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging) return;
-    
-    const newX = e.clientX - offset.x;
-    const newY = e.clientY - offset.y;
-    
-    setPosition({ x: newX, y: newY });
+
+    const newPosition = {
+      x: e.clientX - offset.x,
+      y: e.clientY - offset.y
+    };
+
+    // 只更新位置和计算距离
+    setPosition(newPosition);
     calculateDistance();
   };
+
+  // 当 edges 变化时处理磁吸
+  useEffect(() => {
+    if (!isDragging || !nearestEdges) return;
+
+    const { position: snappedPosition, snapped } = handleSnap(position);
+
+    // 根据吸附状态设置最终位置
+    setPosition({
+      x: snapped.horizontal ? snappedPosition.x : position.x,
+      y: snapped.vertical ? snappedPosition.y : position.y
+    });
+  }, [nearestEdges, isDragging, position, handleSnap]);
 
   const handleMouseUp = () => {
     setIsDragging(false);
